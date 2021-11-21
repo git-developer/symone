@@ -1,0 +1,25 @@
+#!/bin/bash
+set -eu
+
+FORMAT_CSV="${FORMAT_CSV:-true}"
+FORMAT_CSV_SEPARATOR="${FORMAT_CSV_SEPARATOR:-,}"
+
+csv_format_item() {
+  local first="${1-}"
+  ! shift || printf "%s" "${first}" "${@/#/${FORMAT_CSV_SEPARATOR}}" $'\n'
+}
+
+csv_format_message() {
+  for item in "${@}"; do
+    declare -a parts="(${item})"
+    csv_format_item "${parts[@]}"
+  done
+}
+
+csv_format() {
+  if [ "${FORMAT_CSV}"  = 'true' ]; then
+    csv_format_message "${@}"
+  fi
+}
+
+csv_format "${@}"

@@ -1,0 +1,29 @@
+#!/bin/bash
+set -eu
+
+PUBLISH_MQTT="${PUBLISH_MQTT:-true}"
+
+MQTT_TOPIC="${MQTT_TOPIC:-symone}"
+MQTT_TOPIC_APPEND_HOSTNAME="${MQTT_TOPIC_APPEND_HOSTNAME:-true}"
+MQTT_TOPIC_APPEND_FORMAT="${MQTT_TOPIC_APPEND_FORMAT:-true}"
+
+mqtt_publish_message() {
+  local format="${1}"
+  local message="${2}"
+  local hostname="$(hostname)"
+
+  local topic="${MQTT_TOPIC}"
+  [ ! "${MQTT_TOPIC_APPEND_HOSTNAME}" = 'true' ] || topic="${topic}/${hostname}"
+  [ ! "${MQTT_TOPIC_APPEND_FORMAT}"   = 'true' ] || topic="${topic}/${format}"
+
+  declare -a mqtt_options="(${MQTT_OPTIONS})"
+  mosquitto_pub -t "${topic}" -m "${message}" "${mqtt_options[@]}"
+}
+
+mqtt_publish() {
+  if [ "${PUBLISH_MQTT}" = 'true' ]; then
+    mqtt_publish_message "${@}"
+  fi
+}
+
+mqtt_publish "${@}"

@@ -1,0 +1,44 @@
+#!/bin/sh
+set -eu
+
+COLLECTOR_PUBLISHER="${COLLECTOR_PUBLISHER:-echo}"
+COLLECTOR_PROCESS="${COLLECTOR_PROCESS:-true}"
+COLLECTOR_PROCESS_LOAD="${COLLECTOR_PROCESS_LOAD:-true}"
+COLLECTOR_PROCESS_MEMORY="${COLLECTOR_PROCESS_MEMORY:-true}"
+COLLECTOR_PROCESS_ROOT="${COLLECTOR_PROCESS_ROOT:-/proc}"
+
+process_publish() {
+  "${COLLECTOR_PUBLISHER}" "process" "${@}"
+}
+
+process_collect_load() {
+  while read -r load1 load5 load15 threads pid; do
+    process_publish "load" "average1" "${load1}"
+    process_publish "load" "average5" "${load5}"
+    process_publish "load" "average15" "${load15}"
+  done <"${COLLECTOR_PROCESS_ROOT}/loadavg"
+}
+
+process_collect_memory() {
+  export meminfo="$(cat "${COLLECTOR_PROCESS_ROOT}/meminfo")"
+  total="$(    echo "${meminfo}" | sed -nE 's/^MemTotal:\s+(.+)$/\1/p')"
+  free="$(     echo "${meminfo}" | sed -nE 's/^MemFree:\s+(.+)$/\1/p')"
+  available="$(echo "${meminfo}" | sed -nE 's/^MemAvailable:\s+(.+)$/\1/p')"
+  process_publish "memory" "total" "${total}"
+  process_publish "memory" "free" "${free}"
+  process_publish "memory" "available" "${available}"
+}
+
+process_collect() {
+  if [ "${COLLECTOR_PROCESS}" != 'true' ]; then
+    return
+  fi
+  if [ "${COLLECTOR_PROCESS_LOAD}" = 'true' ]; then
+    process_collect_load
+  fi
+  if [ "${COLLECTOR_PROCESS_MEMORY}" = 'true' ]; then
+    process_collect_memory
+  fi
+}
+
+process_collect

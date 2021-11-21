@@ -1,0 +1,36 @@
+#!/bin/bash
+set -eu
+
+FORMAT_JSON="${FORMAT_JSON:-true}"
+
+json_format_item() {
+  to_json() {
+    local key="${1}"
+    local value=""
+    shift
+    if [ "${#}" -eq 1 ]; then
+      value="${1}"
+    elif [ "${#}" -gt 1 ]; then
+      value="$(to_json "${@}")"
+    else
+      echo >&2 "Error: Missing value for key '${key}'"
+    fi
+    jo -p "${key}=${value}"
+  }
+  printf '%s\n' "$(to_json "${@}")"
+}
+
+json_format_message() {
+  for item in "${@}"; do
+    declare -a parts="(${item})"
+    json_format_item "${parts[@]}"
+  done | jq -s 'reduce .[] as $item ({}; . * $item)'
+}
+
+json_format() {
+  if [ "${FORMAT_JSON}" = 'true' ]; then
+    json_format_message "${@}"
+  fi
+}
+
+json_format "${@}"

@@ -1,0 +1,24 @@
+#!/bin/sh
+set -eu
+
+COLLECTOR_PUBLISHER="${COLLECTOR_PUBLISHER:-echo}"
+COLLECTOR_VIDEO_CORE="${COLLECTOR_VIDEO_CORE:-true}"
+
+vc="$(command -v vcgencmd || echo '/opt/vc/bin/vcgencmd')"
+
+video_core_publish() {
+ "${COLLECTOR_PUBLISHER}" 'video-core' "${@}"
+}
+
+video_core_collect() {
+  if [ "${COLLECTOR_VIDEO_CORE}" != 'true' ] || [ ! -x "${vc}" ] || ! "${vc}" version >/dev/null ; then
+    return
+  fi
+
+  temp_soc="$("${vc}" measure_temp | sed -nE 's/^temp=([0-9]+\.[0-9]+)'\''C$/\1 °C/p')"
+  voltage_core="$("${vc}" measure_volts core | sed -nE 's/^volt=([0-9]+\.[0-9]+)(V)$/\1 \2/p')"
+  video_core_publish 'soc' 'temperature' "${temp_soc}"
+  video_core_publish 'core' 'voltage' "${voltage_core}"
+}
+
+video_core_collect

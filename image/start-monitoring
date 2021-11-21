@@ -1,0 +1,3 @@
+#!/bin/sh
+echo "${SCHEDULE:-*/5 * * * *} /opt/symone/take-sample" >/tmp/crontab
+exec supercronic -passthrough-logs /tmp/crontab

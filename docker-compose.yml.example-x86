@@ -1,0 +1,14 @@
+services:
+  symone:
+    image: "ckware/symone"
+    container_name: "symone"
+    hostname: "demo-host"
+    init: true
+    restart: unless_stopped
+    volumes:
+      - "/lost+found:/mnt/root:ro"
+      - "/mnt/demo-mount/lost+found:/mnt/demo-mount:ro"
+    environment:
+      MQTT_OPTIONS: '-h broker-host'
+    extra_hosts:
+      - "broker-host:host-gateway"

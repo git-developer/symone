@@ -1,0 +1,27 @@
+#!/bin/sh
+set -eu
+
+COLLECTOR_PUBLISHER="${COLLECTOR_PUBLISHER:-echo}"
+COLLECTOR_STORAGE="${COLLECTOR_STORAGE:-true}"
+COLLECTOR_STORAGE_ROOT="${COLLECTOR_STORAGE_ROOT:-/mnt}"
+
+storage_publish() {
+  "${COLLECTOR_PUBLISHER}" 'storage' "${@}"
+}
+
+storage_collect() {
+  if [ "${COLLECTOR_STORAGE}" != 'true' ]; then
+    return
+  fi
+
+  LANG=C df -P -a -k \
+  | sed -nE "s;^([^ ]+) +([^ ]+) +([^ ]+) +([^ ]+) +([^ ]+)% +${COLLECTOR_STORAGE_ROOT}/(.*)$;\6 \2 \3 \4 \5;p" \
+  | while read -r target size used available percent; do
+    storage_publish "${target}" 'total' "${size} kB"
+    storage_publish "${target}" 'use' "${used} kB"
+    storage_publish "${target}" 'available' "${available} kB"
+    storage_publish "${target}" 'use_relative' "${percent} %"
+  done
+}
+
+storage_collect

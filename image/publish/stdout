@@ -1,0 +1,19 @@
+#!/bin/sh
+set -eu
+
+PUBLISH_STDOUT="${PUBLISH_STDOUT:-true}"
+
+stdout_publish_message() {
+  local format="${1}"
+  local message="${2}"
+
+  printf '%s:\n%s\n' "${format}" "${message}"
+}
+
+stdout_publish() {
+  if [ "${PUBLISH_STDOUT}" = 'true' ]; then
+    stdout_publish_message "${@}"
+  fi
+}
+
+stdout_publish "${@}"

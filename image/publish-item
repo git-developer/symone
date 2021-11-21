@@ -1,0 +1,12 @@
+#!/bin/bash
+set -eu
+
+publish_item() {
+  [ "${#}" -gt 0 ] || return
+  printf '%q' "${1}"
+  shift
+  printf ' %q' "${@}"
+  printf '\n'
+}
+
+publish_item "${@}"

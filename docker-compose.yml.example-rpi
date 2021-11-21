@@ -1,0 +1,15 @@
+services:
+  symone:
+    image: "ckware/symone"
+    container_name: "symone"
+    hostname: "raspberrypi"
+    init: true
+    restart: unless_stopped
+    user: "1000:44"
+    devices:
+      - /dev/vchiq
+    volumes:
+      - "/lost+found:/mnt/root:ro"
+      - "/boot/System Volume Information:/mnt/boot:ro"
+    environment:
+      MQTT_OPTIONS: '-h broker-host'

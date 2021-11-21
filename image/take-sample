@@ -1,0 +1,58 @@
+#!/bin/bash
+set -eu
+[ -z "${TRACE-}" ] || set -x
+base="$(dirname "${0}")"
+
+export PUBLISH_STDOUT="${PUBLISH_STDOUT:-false}"
+export FORMAT_CSV="${FORMAT_CSV:-false}"
+
+log() {
+  echo >&2 "${@}"
+}
+
+debug() {
+  [ -z "${DEBUG-}" ] || log "${@}"
+}
+
+exists() {
+  local name="${1}"
+  shift
+  if [ "${#}" -eq 0 ]; then
+    log "No ${name} found."
+    return 1
+  fi
+}
+
+find_executables() {
+  local type="${1}"
+  local location="${base}/${type}"
+  [ ! -d "${location}" ] || find "${location}" -type f -executable | sort
+}
+
+collect_items() {
+  for collector in "${@}"; do
+    COLLECTOR_PUBLISHER="${base}/publish-item" "${collector}"
+  done
+}
+
+main() {
+  local formatters=($(find_executables format )) && exists "formatter" "${formatters[@]}" || return
+  local publishers=($(find_executables publish)) && exists "publisher" "${publishers[@]}" || return
+  local collectors=($(find_executables collect)) && exists "collector" "${collectors[@]}" || return
+
+  readarray -t items <<<$(collect_items "${collectors[@]}") && exists "item" "${items[@]}" || return
+  debug "${#items[@]} items collected."
+
+  for formatter in "${formatters[@]}"; do
+    local format="$(basename "${formatter}")"
+    debug "Format: ${format}"
+    local message="$("${formatter}" "${items[@]}")"
+    if [ -n "${message}" ]; then
+      for publisher in "${publishers[@]}"; do
+        "${publisher}" "${format}" "${message}"
+      done
+    fi
+  done
+}
+
+main
