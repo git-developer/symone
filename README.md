@@ -157,6 +157,8 @@ $ sudo apt install docker-compose
 | `COLLECTOR_VIDEO_CORE`     | Collect vidoe core info             | `true`, `false` | `true`  |
 
 #### Debugging
+| Option      | Description             | Examples        | Default |
+| ----------  | ----------------------- | --------------- | ------- |
 | `DEBUG`     | Enable debug log output | `true`, `false` | `false` |
 | `TRACE`     | Enable trace log output | `true`, `false` | `false` |
 
