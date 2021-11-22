@@ -21,4 +21,5 @@ RUN  set -eu \
   && chmod +x "${location}" \
   && ln -s "${location}" /usr/local/bin/supercronic
 COPY ./ /opt/symone/
-CMD  [ "/opt/symone/start-monitoring" ]
+ENV PATH="${PATH}:/opt/symone"
+CMD  [ "start-monitoring" ]

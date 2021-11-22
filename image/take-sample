@@ -31,7 +31,7 @@ find_executables() {
 
 collect_items() {
   for collector in "${@}"; do
-    COLLECTOR_PUBLISHER="${base}/publish-item" "${collector}"
+    COLLECTOR_PUBLISHER="${base}/.publish-item" "${collector}"
   done
 }
 
