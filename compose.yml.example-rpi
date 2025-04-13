@@ -1,6 +1,6 @@
 services:
   symone:
-    image: ckware/symone
+    image: ghcr.io/git-developer/symone
     container_name: symone
     hostname: raspberrypi
     init: true
