@@ -5,6 +5,9 @@ FORMAT_JSON="${FORMAT_JSON:-true}"
 
 json_format_item() {
   to_json() {
+    if [ "$#" -eq 0 ]; then
+      return
+    fi
     local key="${1}"
     local value=""
     shift

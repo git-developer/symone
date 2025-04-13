@@ -1,7 +1,7 @@
 # alpine >3.12 fails on raspbian buster due to https://gitlab.alpinelinux.org/alpine/aports/-/issues/12091 
 FROM alpine:3.12
 ARG TARGETARCH
-ARG SUPERCRONIC_VERSION=v0.1.12
+ARG SUPERCRONIC_VERSION=v0.2.33
 
 RUN  set -eu \
   && apk update \

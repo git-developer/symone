@@ -1,0 +1,164 @@
+#!/bin/sh
+set -eu
+
+here="$(readlink -f "$(dirname "$0")")"
+name="$(basename $0)"
+COLLECTOR_HOST_CONFIG_PATH="${COLLECTOR_HOST_CONFIG_PATH:-${here}/etc}"
+COLLECTOR_HOST_RUNTIME_PATH="${COLLECTOR_HOST_RUNTIME_PATH:-/var/run/symone}"
+COLLECTOR_HOST_DATA_PATH="${COLLECTOR_HOST_DATA_PATH:-${COLLECTOR_HOST_RUNTIME_PATH}/data}"
+COLLECTOR_HOST_PIPE="${COLLECTOR_HOST_PIPE:-${COLLECTOR_HOST_RUNTIME_PATH}/host-monitor}"
+COLLECTOR_HOST_PIPE_MODE="${COLLECTOR_HOST_PIPE_MODE:-a=rw}"
+COLLECTOR_HOST_TIMEOUT="${COLLECTOR_HOST_TIMEOUT:-1}"
+COLLECTOR_HOST_SYSTEMD_PATH="${COLLECTOR_HOST_SYSTEMD_PATH:-/etc/systemd/system/${name}.service}"
+
+log() {
+  echo >&2 "$@"
+}
+
+debug() {
+  if [ "${DEBUG:-false}" = 'true' ]; then
+    log "DEBUG: $@"
+  fi
+}
+
+warn() {
+  log "WARNING: $@"
+}
+
+cancel() {
+  log "ERROR: $@"
+  return 1
+}
+
+prepare() {
+  trap shutdown EXIT INT QUIT TERM
+  trap restart HUP
+  if [ ! -p "${COLLECTOR_HOST_PIPE}" ]; then
+    mkdir -p "$(dirname "${COLLECTOR_HOST_PIPE}")"
+    mkfifo -m "${COLLECTOR_HOST_PIPE_MODE}" "${COLLECTOR_HOST_PIPE}"
+  fi
+  mkdir -p "${COLLECTOR_HOST_DATA_PATH}"
+}
+
+collect() {
+  config="${1}"
+  if [ -z "${config}" ]; then
+    warn "Missing configuration"
+    return
+  fi
+
+  config_path="${COLLECTOR_HOST_CONFIG_PATH}/${config}"
+  if [ ! -r "${config_path}" ]; then
+    warn "Skipping non-readable configuration file '${config_path}'"
+    return
+  fi
+
+  ( # open subshell to isolate variables between runs
+    . "${config_path}"
+    if [ -z "${CSV_COMMAND-}" ]; then
+      warn "Skipping '${config}' due to missing CSV_COMMAND"
+      # nevertheless close the pipe to avoid blocking the receiver
+      CSV_COMMAND='</dev/null'
+    fi
+    debug  "Running command: ${CSV_COMMAND}"
+    sh -c "${CSV_COMMAND}" >>"${COLLECTOR_HOST_DATA_PATH}/${config}"
+    debug  "Command finished."
+  )
+}
+
+status() {
+  if [ -p "${COLLECTOR_HOST_PIPE}" ]; then
+    log "${name} is monitoring ${COLLECTOR_HOST_PIPE}"
+  else
+    log "${name} is stopped"
+    return 3
+  fi
+}
+
+start() {
+  if [ -p "${COLLECTOR_HOST_PIPE}" ]; then
+    cancel "${name} is already running."
+  fi
+
+  prepare
+
+  log "${name} starts monitoring ${COLLECTOR_HOST_PIPE}"
+  while true; do
+    debug "Listening for requests"
+    if read request id <"${COLLECTOR_HOST_PIPE}"; then
+      debug "Received request: ${request} ${id}"
+      case "${request}" in
+        collect) collect "${id}" ;;
+        stop)    break   ;;
+        *)       warn "Ignoring unsupported request '${request}'" ;;
+      esac
+    else
+      log "${name} was interrupted by signal $? when monitoring ${COLLECTOR_HOST_PIPE}"
+      break
+    fi
+  done
+}
+
+stop() {
+  if status 2>/dev/null && ! echo stop | timeout "${COLLECTOR_HOST_TIMEOUT}" tee "${COLLECTOR_HOST_PIPE}" >/dev/null; then
+    log "${name} did not respond within ${COLLECTOR_HOST_TIMEOUT}s and is assumed to be stopped."
+    log "Forcing removal of orphan ${COLLECTOR_HOST_PIPE}."
+    shutdown
+  fi
+}
+
+restart() {
+  stop
+  sleep 1
+  start
+}
+
+shutdown() {
+  if [ -e "${COLLECTOR_HOST_PIPE}" ]; then
+    log "${name} stops monitoring ${COLLECTOR_HOST_PIPE}"
+    rm "${COLLECTOR_HOST_PIPE}"
+  fi
+}
+
+systemd_install() {
+  target="${1:-${COLLECTOR_HOST_SYSTEMD_PATH}}"
+
+  if [ -e "${target}" ]; then
+    cancel "systemd service unit '${target}' already exists"
+  fi
+  me="$(readlink -f "$0")"
+  printf >"${target}" '%s\n' \
+    '[Unit]' 'Description=SYMONE host service' '' \
+    '[Service]' "ExecStart='${me}' start" '' \
+    '[Install]' 'WantedBy=multi-user.target'
+  systemctl enable "${name}"
+  systemctl start "${name}"
+}
+
+systemd_uninstall() {
+  target="${1:-${COLLECTOR_HOST_SYSTEMD_PATH}}"
+
+  systemctl stop "${name}"
+  systemctl disable "${name}"
+  rm -i "${target}"
+}
+
+main() {
+  if [ "$#" -eq 0 ]; then
+    log "Usage: ${name} [start | stop | restart | status | systemd-install [target] | systemd-uninstall [target] ]"
+    return 1
+  fi
+
+  command="$1"
+  case "${command}" in
+    start)             start   ;;
+    stop)              stop    ;;
+    status)            status  ;;
+    restart)           restart ;;
+    systemd-install)   systemd_install ;;
+    systemd-uninstall) systemd_uninstall ;;
+    *)                 warn "Ignoring unsupported command '${command}'" ;;
+  esac
+}
+
+main "$@"

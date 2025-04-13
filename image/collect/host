@@ -1,0 +1,91 @@
+#!/bin/sh
+set -eu
+
+COLLECTOR_PUBLISHER="${COLLECTOR_PUBLISHER:-echo}"
+COLLECTOR_HOST="${COLLECTOR_HOST:-true}"
+COLLECTOR_HOST_CONFIG_PATH="${COLLECTOR_HOST_CONFIG_PATH:-/opt/symone/etc}"
+COLLECTOR_HOST_RUNTIME_PATH="${COLLECTOR_HOST_RUNTIME_PATH:-/var/run/symone}"
+COLLECTOR_HOST_DATA_PATH="${COLLECTOR_HOST_DATA_PATH:-${COLLECTOR_HOST_RUNTIME_PATH}/data}"
+COLLECTOR_HOST_PIPE="${COLLECTOR_HOST_PIPE:-${COLLECTOR_HOST_RUNTIME_PATH}/host-monitor}"
+COLLECTOR_HOST_PIPE_TIMEOUT="${COLLECTOR_HOST_PIPE_TIMEOUT:-1}"
+
+CSV_FIELDS="${CSV_FIELDS:-value}"
+CSV_EXCLUDES="${CSV_EXCLUDES-}"
+CSV_SEPARATOR="${CSV_SEPARATOR:-${IFS}}"
+CSV_SKIP_LINES="${CSV_SKIP_LINES:-0}"
+CSV_GROUP_BY="${CSV_GROUP_BY-}"
+
+host_log() {
+  echo >&2 "$@"
+}
+
+host_warn() {
+  host_log "WARNING: $@"
+}
+
+host_publish() {
+  "${COLLECTOR_PUBLISHER}" "${@}"
+}
+
+host_request_csv() {
+  id="${1}"
+  csv_file="${2}"
+
+  if [ -p "${COLLECTOR_HOST_PIPE}" ]; then
+    if [ ! -e "${csv_file}" ]; then
+      mkfifo "${csv_file}"
+    fi
+    if ! echo collect "${id}" | timeout "${COLLECTOR_HOST_PIPE_TIMEOUT}" tee "${COLLECTOR_HOST_PIPE}" >/dev/null; then
+      host_warn "Command was not read from ${COLLECTOR_HOST_PIPE} within ${COLLECTOR_HOST_PIPE_TIMEOUT}s"
+    fi
+  fi
+}
+
+host_process_csv() {
+  id="${1}"
+  csv_file="${2}"
+  config_file="${3}"
+
+  # '-a': export variables so that they are visible to printenv
+  # '-f': disable glob resolving of unquoted variables
+  set -af
+  . "${config_file}"
+  tail -n "+$((1+${CSV_SKIP_LINES}))" "${csv_file}" \
+      | while IFS="${CSV_SEPARATOR:-${IFS}}" read -r ${CSV_FIELDS}; do
+    for field in ${CSV_FIELDS}; do
+      # surround with spaces to catch first and last exclude
+      if ! echo " ${CSV_EXCLUDES} " | grep -q " ${field} "; then
+        value=$(printenv "${field}")
+        host_publish "${id}" ${CSV_GROUP_BY:+$(printenv "${CSV_GROUP_BY}")} "${field}" "${value}"
+      fi
+    done
+  done
+  rm "${csv_file}"
+}
+
+host_collect() {
+  if [ "${COLLECTOR_HOST}" != 'true' ] \
+  || [ ! -d "${COLLECTOR_HOST_CONFIG_PATH}" ] \
+  || [ ! -d "${COLLECTOR_HOST_DATA_PATH}" ]; then
+    return
+  fi
+
+  if [ ! -p "${COLLECTOR_HOST_PIPE}" ]; then
+    host_warn "Skipping host collector because there is no monitor for ${COLLECTOR_HOST_PIPE}"
+    host_warn "Please make sure that the daemon is running on the host."
+    return 1
+  fi
+
+  find "${COLLECTOR_HOST_CONFIG_PATH}" -mindepth 1 -perm +u=r ! -type d | while read -r config_file; do (
+    id="${config_file##${COLLECTOR_HOST_CONFIG_PATH}}"
+    id="${id##/}"
+    csv_file="${COLLECTOR_HOST_DATA_PATH}/${id}"
+
+    host_request_csv "${id}" "${csv_file}"
+    if [ -e "${csv_file}" ]; then
+      host_process_csv "${id}" "${csv_file}" "${config_file}"
+    fi
+  ); done
+}
+
+host_collect
