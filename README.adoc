@@ -181,6 +181,14 @@ $ sudo apt install docker-compose-v2
 | `COLLECTOR_HOST`              | Collect info read from the host     | `true`, `false` | `true`
 |===
 
+==== Debugging
+|===
+|Option|Description|Example|Default
+
+| `DEBUG`     | Enable debug log output | `true`, `false` | `false`
+| `TRACE`     | Enable trace log output | `true`, `false` | `false`
+|===
+
 === Host collector
 
 SYMONE contains an optional feature to collect info that is not available within the container.
@@ -342,14 +350,6 @@ $ sudo ./symone-host-service systemd-uninstall
 ```
 
 It is possible to use the `symone-host-service` without systemd. It is a self-contained executable that offers subcommands to `start`, `stop` and show the `status`.
-
-==== Debugging
-|===
-|Option|Description|Example|Default
-
-| `DEBUG`     | Enable debug log output | `true`, `false` | `false`
-| `TRACE`     | Enable trace log output | `true`, `false` | `false`
-|===
 
 == FHEM integration
 This section contains an example configuration to integrate SYMONE with https://fhem.de/[FHEM].
