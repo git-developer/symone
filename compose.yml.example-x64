@@ -6,7 +6,7 @@ services:
     init: true
     restart: unless_stopped
     volumes:
-      - "./etc:/opt/symone/etc:ro"
+      - "./collectors:/opt/symone/host-collectors:ro"
       - "/var/run/symone:/var/run/symone"
       - "/lost+found:/mnt/root:ro"
       - "/mnt/demo-mount/lost+found:/mnt/demo-mount:ro"

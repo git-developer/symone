@@ -3,7 +3,7 @@ set -eu
 
 here="$(readlink -f "$(dirname "$0")")"
 name="$(basename $0)"
-COLLECTOR_HOST_CONFIG_PATH="${COLLECTOR_HOST_CONFIG_PATH:-${here}/etc}"
+COLLECTOR_HOST_COLLECTORS_PATH="${COLLECTOR_HOST_COLLECTORS_PATH:-${here}/collectors}"
 COLLECTOR_HOST_RUNTIME_PATH="${COLLECTOR_HOST_RUNTIME_PATH:-/var/run/symone}"
 COLLECTOR_HOST_DATA_PATH="${COLLECTOR_HOST_DATA_PATH:-${COLLECTOR_HOST_RUNTIME_PATH}/data}"
 COLLECTOR_HOST_DATA_MODE="${COLLECTOR_HOST_DATA_MODE:-a=rwx}"
@@ -43,29 +43,16 @@ prepare() {
 }
 
 collect() {
-  config="${1}"
-  if [ -z "${config}" ]; then
-    warn "Missing configuration"
-    return
-  fi
+  id="${1}"
+  command="${COLLECTOR_HOST_COLLECTORS_PATH}/${id}"
+  target="${COLLECTOR_HOST_DATA_PATH}/${id}"
 
-  config_path="${COLLECTOR_HOST_CONFIG_PATH}/${config}"
-  if [ ! -r "${config_path}" ]; then
-    warn "Skipping non-readable configuration file '${config_path}'"
-    return
+  debug "Running ${command}"
+  if env -i ${DEBUG:+sh -x -c} "${command}" >>"${target}"; then
+    debug "${command} finished successfully"
+  else
+    warn "${command} returned code $?"
   fi
-
-  ( # open subshell to isolate variables between runs
-    . "${config_path}"
-    if [ -z "${CSV_COMMAND-}" ]; then
-      warn "Skipping '${config}' due to missing CSV_COMMAND"
-      # nevertheless close the pipe to avoid blocking the receiver
-      CSV_COMMAND='</dev/null'
-    fi
-    debug  "Running command: ${CSV_COMMAND}"
-    sh -c "${CSV_COMMAND}" >>"${COLLECTOR_HOST_DATA_PATH}/${config}"
-    debug  "Command finished."
-  )
 }
 
 status() {
@@ -118,10 +105,10 @@ restart() {
 shutdown() {
   if [ -e "${COLLECTOR_HOST_PIPE}" ]; then
     log "${name} stops monitoring ${COLLECTOR_HOST_PIPE}"
-    rm "${COLLECTOR_HOST_PIPE}"
+    rm -f "${COLLECTOR_HOST_PIPE}"
   fi
   if [ -d "${COLLECTOR_HOST_DATA_PATH}" ]; then
-    rmdir "${COLLECTOR_HOST_DATA_PATH}"
+    rm -r "${COLLECTOR_HOST_DATA_PATH}"
   fi
 }
 

@@ -9,7 +9,7 @@ services:
     devices:
       - /dev/vchiq
     volumes:
-      - "./etc:/opt/symone/etc:ro"
+      - "./collectors:/opt/symone/host-collectors:ro"
       - "/var/run/symone:/var/run/symone"
       - "/lost+found:/mnt/root:ro"
       - "/boot/System Volume Information:/mnt/boot:ro"

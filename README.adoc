@@ -33,7 +33,7 @@ services:
     devices:
       - /dev/vchiq
     volumes:
-      - "./etc:/opt/symone/etc:ro"
+      - "./collectors:/opt/symone/host-collectors:ro"
       - "/var/run/symone:/var/run/symone"
       - "/lost+found:/mnt/root:ro"
       - "/boot/System Volume Information:/mnt/boot:ro"
@@ -102,7 +102,7 @@ $ sudo apt install docker-compose-v2
 == Usage
 * Create a configuration file `compose.yml` (see the examples and docs for an inspiration)
 * Optionally, when the host collector is used:
-** Add one or more configurations in `./etc`
+** Add one or more collector scripts in `./collectors`
 ** Install and start the `symone-host-service`
 * Start SYMONE by calling `docker compose up -d`
 
@@ -206,57 +206,37 @@ services:
   symone:
     volumes:
       - '/var/run/symone:/var/run/symone'
-      - './etc:/opt/symone/etc:ro'
+      - './collectors:/opt/symone/host-collectors:ro'
 ----
 
 `/var/run/symone` is a working directory that is used internally for communication between container and host.
 
-`./etc` is a directory for configuration files that specify what to collect.
-Each file contains a command that is run by the `symone-host-service` on the host.
-Its output of is parsed and sent to publishers.
-Each line of output is expected to contain one or more values.
-Several options are available to parse and filter the command output.
+`./collectors` is a directory for custom collectors.
+A collector is an executable that is run by the `symone-host-service` on the host.
+Its output is parsed and sent to publishers.
+Each line of output is expected to contain one or more keys and a trailing value.
+Non-executable files are skipped.
 
-Configuration files without read permission are skipped.
-
-===== Options
-
-[cols="1,3,3"]
-|===
-|Option|Description|Default
-
-| `CSV_COMMAND`      | Command to run on the host | _none_
-| `CSV_FIELDS`       | Field names of the content | `value`
-| `CSV_EXCLUDES`     | List of fields to ignore | _none_
-| `CSV_SEPARATOR`    | Field separator | `${IFS}`
-| `CSV_SKIP_LINES`   | Number of lines to ignore (to skip headers of command output) | `0`
-| `CSV_GROUP_BY`     | Name of a field that groups all values of the line | _none_
-|===
-
-===== Examples
-
-[cols="1,3a,3a"]
+[cols="1,2a,3a"]
 |===
 |Example|Configuration|Published output
 
 | Simple command
-| .`./etc/timestamp`
+| .`./collectors/simple`
 ```shell
-CSV_COMMAND='date -u -Is'
+echo timestamp "$(date -u -Is)"
 ```
 | ```json
-{
-  "timestamp": {
-    "value": "2025-04-13T10:42:34+00:00"
-  }
-}
+{ "timestamp": "2025-04-13T10:42:34+00:00" }
 ```
 
 | Multiple values
-| .`./etc/dice`
+| .`./collectors/multiple-values`
 ```shell
-CSV_COMMAND='shuf -i 1-6 -n 2 \| xargs'
-CSV_FIELDS='first-roll second-roll'
+for roll in first second; do
+  printf 'dice %s-roll %s\n' \
+    "${roll}" "$(shuf -i 1-6 -n 1)"
+done
 ```
 | ```json
 {
@@ -267,14 +247,18 @@ CSV_FIELDS='first-roll second-roll'
 }
 ```
 
-| Filter & group
-| .`./etc/tempfs-usage`
+| Post processing
+| .`./collectors/post-processing`
 ```shell
-CSV_COMMAND='df -t tmpfs -h'
-CSV_FIELDS='fs total used available usage mountpoint'
-CSV_EXCLUDES='fs mountpoint usage'
-CSV_GROUP_BY=mountpoint
-CSV_SKIP_LINES=1
+set -a
+LANG=C df -t tmpfs -h \
+\| tail -n +2 \
+\| while read fs total used available usage mountpoint; do
+  for field in total used available; do
+    printf 'tempfs-usage %s %s %s\n' \
+      "${mountpoint}" "${field}" "$(printenv "${field}")"
+  done
+done
 ```
 | ```json
 {
@@ -299,20 +283,27 @@ CSV_SKIP_LINES=1
 ```
 
 | Container statistics
-| .`./etc/containers`
+| .`./collectors/container-statistics`
 ```shell
-CSV_COMMAND='docker stats --no-stream'
-CSV_FIELDS='container_id container_name
-            cpu_usage
-            memory_usage memory_limit memory_percent
-            network_read network_written
-            block_read block_written
-            pid_count'
-CSV_EXCLUDES='container_id container_name
-              memory_percent pid_count'
-CSV_SEPARATOR=' /'
-CSV_GROUP_BY=container_name
-CSV_SKIP_LINES=1
+#!/bin/sh
+set -eua
+fields='cpu_usage
+        memory_usage memory_limit
+        network_read network_written
+        block_read block_written
+        pid_count'
+LANG=C
+docker stats --no-stream --format \
+  "{{.Name}} {{.CPUPerc}} {{.MemUsage}} {{.NetIO}} {{.BlockIO}} {{.PIDs}}" \
+\| sed "s/kB\s/KB /g;s:/::g;s/\s\+/ /g" \
+\| numfmt --suffix B --field=3-8 --to-unit=1024 --from=auto --padding=1 \
+\| sed "s/B /kB /g" \
+\| while read -r container_name ${fields}; do
+  for field in ${fields}; do
+    printf '%s %s %s %s\n' \
+      "containers" "${container_name}" "${field}" "$(printenv "${field}")"
+  done
+done
 ```
 | ```json
 {
@@ -326,6 +317,23 @@ CSV_SKIP_LINES=1
       "block_read": "0B",
       "block_written": "0B"
     }
+}
+```
+
+| Quoted values
+| .`./collectors/quoted-values`
+```shell
+cat - <<'EOF'
+a "b" 'c d' $'e\nf'
+EOF
+```
+| ```json
+{ 
+  "a": {
+    "b": {
+      "c d": "e\nf"
+    }
+  }
 }
 ```
 |===
