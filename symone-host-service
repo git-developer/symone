@@ -119,10 +119,12 @@ systemd_install() {
     cancel "systemd service unit '${target}' already exists"
   fi
   me="$(readlink -f "$0")"
-  printf >"${target}" '%s\n' \
+  service_unit="${here}/${name}.service"
+  printf >"${service_unit}" '%s\n' \
     '[Unit]' 'Description=SYMONE host service' '' \
     '[Service]' "ExecStart='${me}' start" '' \
     '[Install]' 'WantedBy=multi-user.target'
+  ln -s "${service_unit}" "${target}"
   systemctl enable "${name}"
   systemctl start "${name}"
 }
