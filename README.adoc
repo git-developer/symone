@@ -73,7 +73,7 @@ Result: every 5 minutes, she publishes a JSON message via MQTT to topic `/symone
     }
   },
   "thermal": {
-    "thermal_zone0": {
+    "cpu-thermal": {
       "temperature": "54.768 °C"
     }
   },
@@ -177,6 +177,8 @@ $ sudo apt install docker-compose-v2
 | `COLLECTOR_STORAGE_ROOT`      | Root directory for storage          | `/mnt`          | `/mnt`
 | `COLLECTOR_THERMAL`           | Collect info about thermal          | `true`, `false` | `true`
 | `COLLECTOR_THERMAL_ROOT`      | Root directory for thermal info     | `/sys/devices/virtual/thermal` | `/sys/devices/virtual/thermal`
+| `COLLECTOR_THERMAL_TYPE`      | Group thermal info by type          | `true`, `false` | `true`
+| `COLLECTOR_THERMAL_ZONE`      | Group thermal info by zone          | `true`, `false` | `false`
 | `COLLECTOR_VIDEO_CORE`        | Collect video core info             | `true`, `false` | `true`
 | `COLLECTOR_HOST`              | Collect info read from the host     | `true`, `false` | `true`
 |===
